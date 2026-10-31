@@ -1179,36 +1179,36 @@ namespace FnirsiDps150Studio
             chgLayout.SetColumnSpan(paramsGrid, 2);
 
             // 5-Stage Charging Profile Indicator Strip
-            var stageStrip = new TableLayoutPanel
+            var stageStrip = new FlowLayoutPanel
             {
-                Dock = DockStyle.Top,
-                Height = 42,
-                ColumnCount = 5,
-                RowCount = 1,
-                Margin = new Padding(0, 2, 0, 4)
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0, 2, 0, 5)
             };
             for (int st = 0; st < 5; st++)
             {
-                stageStrip.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20f));
                 var pBox = new Panel
                 {
-                    Dock = DockStyle.Fill,
+                    Size = new Size(112, 38),
                     BackColor = PanelDark,
-                    Margin = new Padding(st == 0 ? 0 : 2, 1, st == 4 ? 0 : 2, 1),
+                    Margin = new Padding(0, 0, 4, 0),
                     BorderStyle = BorderStyle.FixedSingle
                 };
                 var lBox = new Label
                 {
-                    Dock = DockStyle.Fill,
+                    AutoSize = false,
+                    Location = new Point(0, 0),
+                    Size = new Size(110, 36),
                     TextAlign = ContentAlignment.MiddleCenter,
                     ForeColor = TextMuted,
-                    Font = new Font("Consolas", 7.8f, FontStyle.Bold),
+                    Font = new Font("Consolas", 7.5f, FontStyle.Bold),
                     Text = "ETAP " + (st + 1)
                 };
                 pBox.Controls.Add(lBox);
                 _pnlStageBox[st] = pBox;
                 _lblStageBox[st] = lBox;
-                stageStrip.Controls.Add(pBox, st, 0);
+                stageStrip.Controls.Add(pBox);
             }
             chgLayout.Controls.Add(stageStrip, 0, 4);
             chgLayout.SetColumnSpan(stageStrip, 2);
@@ -2809,20 +2809,20 @@ namespace FnirsiDps150Studio
 
             string[] titlesPl = new string[]
             {
-                "ETAP 1: PRE-CHARGE\r\nWybudzanie (0.15C)",
-                "ETAP 2: SOFT-START\r\nNarastanie prądu",
-                "ETAP 3: BULK (CC)\r\nStały Prąd główny",
-                "ETAP 4: ABSORP. (CV)\r\nStałe Napięcie",
-                isLeadAcid ? "ETAP 5: FLOAT (PB)\r\nBufor 2.25V/ogn." : "ETAP 5: AUTO-STOP\r\nOdcięcie 100%"
+                "1. PRE-CHARGE\r\nWybudzanie 0.15C",
+                "2. SOFT-START\r\nNarastanie prądu",
+                "3. BULK (CC)\r\nStały Prąd",
+                "4. ABSORP. (CV)\r\nStałe Napięcie",
+                isLeadAcid ? "5. FLOAT (PB)\r\nBufor 2.25V/ogn." : "5. AUTO-STOP\r\nOdcięcie 100%"
             };
 
             string[] titlesEn = new string[]
             {
-                "STAGE 1: PRE-CHARGE\r\nWake-up (0.15C)",
-                "STAGE 2: SOFT-START\r\nCurrent Ramp",
-                "STAGE 3: BULK (CC)\r\nConstant Current",
-                "STAGE 4: ABSORP. (CV)\r\nConstant Voltage",
-                isLeadAcid ? "STAGE 5: FLOAT (PB)\r\nBuffer 2.25V/cell" : "STAGE 5: AUTO-STOP\r\nCutoff 100%"
+                "1. PRE-CHARGE\r\nWake-up 0.15C",
+                "2. SOFT-START\r\nCurrent Ramp",
+                "3. BULK (CC)\r\nConst Current",
+                "4. ABSORP. (CV)\r\nConst Voltage",
+                isLeadAcid ? "5. FLOAT (PB)\r\nBuffer 2.25V/c" : "5. AUTO-STOP\r\nCutoff 100%"
             };
 
             for (int i = 0; i < 5; i++)
