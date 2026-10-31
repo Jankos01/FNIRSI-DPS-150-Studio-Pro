@@ -1438,6 +1438,12 @@ namespace FnirsiDps150Studio
                 Padding = new Padding(8, 4, 8, 4)
             };
 
+            _btnPauseChart = CreateFlatButton("⏸ ZATRZYMAJ PRZEBIEG (PAUZA) [P]", new Size(235, 28), Color.FromArgb(180, 83, 9));
+            _btnPauseChart.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            _btnPauseChart.FlatAppearance.BorderColor = AccentAmber;
+            _btnPauseChart.Margin = new Padding(0, 1, 10, 0);
+            toolbar.Controls.Add(_btnPauseChart);
+
             _chkShowV = new CheckBox
             {
                 Text = "Napięcie Vout",
@@ -1473,7 +1479,7 @@ namespace FnirsiDps150Studio
                 Text = "Auto-skala Y",
                 Checked = true,
                 AutoSize = true,
-                Margin = new Padding(4, 5, 12, 0),
+                Margin = new Padding(4, 5, 10, 0),
                 ForeColor = TextLight
             };
             toolbar.Controls.Add(_chkAutoScale);
@@ -1489,16 +1495,12 @@ namespace FnirsiDps150Studio
                 toolbar.Controls.Add(btnWin);
             }
 
-            _btnPauseChart = CreateFlatButton("⏸ Pauza [P]", new Size(118, 27), PanelDark);
-            _btnPauseChart.Margin = new Padding(10, 1, 4, 0);
-            toolbar.Controls.Add(_btnPauseChart);
-
-            _btnClearChart = CreateFlatButton("🗑 Wyczyść", new Size(96, 27), PanelDark);
-            _btnClearChart.Margin = new Padding(2, 1, 4, 0);
+            _btnClearChart = CreateFlatButton("🗑 Wyczyść", new Size(92, 27), PanelDark);
+            _btnClearChart.Margin = new Padding(8, 1, 4, 0);
             _btnClearChart.Click += (s, e) => _chart.ClearSamples();
             toolbar.Controls.Add(_btnClearChart);
 
-            _btnExportCsv = CreateFlatButton("💾 Eksportuj CSV...", new Size(142, 27), Color.FromArgb(2, 132, 199));
+            _btnExportCsv = CreateFlatButton("💾 Eksportuj CSV...", new Size(138, 27), Color.FromArgb(2, 132, 199));
             _btnExportCsv.Margin = new Padding(2, 1, 4, 0);
             _btnExportCsv.Click += (s, e) => ExportChartToCsv();
             toolbar.Controls.Add(_btnExportCsv);
@@ -1507,6 +1509,7 @@ namespace FnirsiDps150Studio
             {
                 Dock = DockStyle.Fill
             };
+            _chart.OnViewportChanged += () => UpdatePauseButtonUi();
 
             layout.Controls.Add(toolbar, 0, 0);
             layout.Controls.Add(_chart, 0, 1);
@@ -2256,9 +2259,7 @@ namespace FnirsiDps150Studio
             _chkShowI.Text = en ? "Current Iout" : "Prąd Iout";
             _chkShowP.Text = en ? "Power Pout" : "Moc Pout";
             _chkAutoScale.Text = en ? "Auto-scale Y" : "Auto-skala Y";
-            _btnPauseChart.Text = _chart.IsPaused
-                ? (en ? "▶ Resume [P]" : "▶ Wznów [P]")
-                : (en ? "⏸ Pause [P]" : "⏸ Pauza [P]");
+            UpdatePauseButtonUi();
             _btnClearChart.Text = en ? "🗑 Clear" : "🗑 Wyczyść";
             _btnExportCsv.Text = en ? "💾 Export CSV..." : "💾 Eksportuj CSV...";
 
@@ -3001,10 +3002,28 @@ namespace FnirsiDps150Studio
         private void ToggleChartPause()
         {
             _chart.IsPaused = !_chart.IsPaused;
-            _btnPauseChart.Text = _chart.IsPaused
-                ? (_isEnglish ? "▶ Resume [P]" : "▶ Wznów [P]")
-                : (_isEnglish ? "⏸ Pause [P]" : "⏸ Pauza [P]");
-            _btnPauseChart.BackColor = _chart.IsPaused ? Color.FromArgb(217, 119, 6) : PanelDark;
+            UpdatePauseButtonUi();
+        }
+
+        private void UpdatePauseButtonUi()
+        {
+            if (_btnPauseChart == null || _chart == null) return;
+            if (_chart.IsPaused)
+            {
+                _btnPauseChart.Text = _isEnglish
+                    ? "▶ RESUME WAVEFORM (LIVE) [P]"
+                    : "▶ WZNÓW PRZEBIEG (NA ŻYWO) [P]";
+                _btnPauseChart.BackColor = Color.FromArgb(5, 150, 105);
+                _btnPauseChart.FlatAppearance.BorderColor = AccentGreen;
+            }
+            else
+            {
+                _btnPauseChart.Text = _isEnglish
+                    ? "⏸ PAUSE WAVEFORM (HOLD) [P]"
+                    : "⏸ ZATRZYMAJ PRZEBIEG (PAUZA) [P]";
+                _btnPauseChart.BackColor = Color.FromArgb(180, 83, 9);
+                _btnPauseChart.FlatAppearance.BorderColor = AccentAmber;
+            }
             _chart.Invalidate();
         }
 

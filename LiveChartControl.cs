@@ -16,8 +16,36 @@ namespace FnirsiDps150Studio
         public bool ShowPower = true;
         public bool ShowSetpoints = true;
         public bool AutoScaleY = true;
-        public bool IsPaused = false;
         public bool IsEnglish = false;
+
+        private bool _isPaused = false;
+        private double _pausedAtTime = -1.0;
+        public bool IsPaused
+        {
+            get { return _isPaused; }
+            set
+            {
+                if (_isPaused != value)
+                {
+                    _isPaused = value;
+                    lock (_sync)
+                    {
+                        if (_isPaused && _samples.Count > 0)
+                        {
+                            _pausedAtTime = _samples[_samples.Count - 1].ElapsedSeconds;
+                        }
+                        else
+                        {
+                            _pausedAtTime = -1.0;
+                            _panOffsetSeconds = 0.0;
+                        }
+                    }
+                    var handler = OnViewportChanged;
+                    if (handler != null) handler();
+                    Invalidate();
+                }
+            }
+        }
 
         // Time window in seconds (zoom level)
         private double _timeWindowSeconds = 30.0;
@@ -120,6 +148,12 @@ namespace FnirsiDps150Studio
             if (handler != null) handler();
         }
 
+        protected override void OnDoubleClick(EventArgs e)
+        {
+            base.OnDoubleClick(e);
+            IsPaused = !IsPaused;
+        }
+
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
@@ -129,9 +163,13 @@ namespace FnirsiDps150Studio
                 _dragStartPoint = e.Location;
                 _dragStartOffset = _panOffsetSeconds;
             }
+            else if (e.Button == MouseButtons.Middle)
+            {
+                IsPaused = !IsPaused;
+            }
             else if (e.Button == MouseButtons.Right)
             {
-                // Right-click resets pan to live edge
+                // Right-click resets pan to live edge and resumes
                 _panOffsetSeconds = 0;
                 IsPaused = false;
                 var handler = OnViewportChanged;
@@ -149,6 +187,10 @@ namespace FnirsiDps150Studio
             {
                 int plotWidth = Math.Max(100, this.Width - 110);
                 int dx = e.X - _dragStartPoint.X;
+                if (Math.Abs(dx) > 5 && !_isPaused)
+                {
+                    IsPaused = true;
+                }
                 double deltaSec = (dx / (double)plotWidth) * _timeWindowSeconds;
                 PanOffsetSeconds = _dragStartOffset + deltaSec;
                 var handler = OnViewportChanged;
@@ -196,7 +238,14 @@ namespace FnirsiDps150Studio
             {
                 if (_samples.Count > 0)
                 {
-                    latestTime = _samples[_samples.Count - 1].ElapsedSeconds;
+                    if (_isPaused && _pausedAtTime >= 0)
+                    {
+                        latestTime = _pausedAtTime;
+                    }
+                    else
+                    {
+                        latestTime = _samples[_samples.Count - 1].ElapsedSeconds;
+                    }
                     double tEnd = latestTime - _panOffsetSeconds;
                     double tStart = tEnd - _timeWindowSeconds;
 
@@ -334,6 +383,26 @@ namespace FnirsiDps150Studio
                 string wm = "⚡ CREATED BY PATRYK JANKOWSKI • DPS-150 STUDIO";
                 SizeF wmSz = g.MeasureString(wm, fWm);
                 g.DrawString(wm, fWm, bWm, plotRect.Right - wmSz.Width - 10, plotRect.Top + 6);
+            }
+
+            if (_isPaused)
+            {
+                using (Font fPause = new Font("Consolas", 9.5f, FontStyle.Bold))
+                {
+                    string pText = IsEnglish
+                        ? "⏸ PAUSED (HOLD) — Move cursor to inspect | Scroll=Zoom | Drag=Pan | Double-click/Space to Resume"
+                        : "⏸ PAUZA (HOLD) — Najedz kursorem aby sprawdzic przebieg | Rolka=Zoom | LPM=Przesun | Spacja/2xKlik=Wznow";
+                    SizeF pSz = g.MeasureString(pText, fPause);
+                    RectangleF badgeRect = new RectangleF(plotRect.Left + 8, plotRect.Top + 6, pSz.Width + 14, pSz.Height + 6);
+                    using (Brush bBg = new SolidBrush(Color.FromArgb(230, 180, 83, 9)))
+                    using (Pen pBrd = new Pen(Color.FromArgb(255, 214, 0), 1.2f))
+                    using (Brush bTxt = new SolidBrush(Color.White))
+                    {
+                        g.FillRectangle(bBg, badgeRect);
+                        g.DrawRectangle(pBrd, badgeRect.X, badgeRect.Y, badgeRect.Width, badgeRect.Height);
+                        g.DrawString(pText, fPause, bTxt, badgeRect.X + 7, badgeRect.Y + 3);
+                    }
+                }
             }
 
             using (Pen borderPen = new Pen(BorderColor, 1f))
