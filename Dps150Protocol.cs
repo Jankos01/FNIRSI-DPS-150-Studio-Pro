@@ -73,6 +73,7 @@ namespace FnirsiDps150Studio
         public float RippleVppMv = 0.0f;
         public float RippleIppMa = 0.0f;
         public double OutputOnSeconds = 0.0;
+        public int SettingsSyncVersion = 0;
 
         public DateTime LastUpdated = DateTime.Now;
 
@@ -156,10 +157,14 @@ namespace FnirsiDps150Studio
         private volatile bool _running;
         private volatile bool _isConnected;
         private volatile bool _isSimulated;
+        private string _lastPortName;
+        private int _lastBaudRate = 115200;
+        private bool _timelineInitialized = false;
         private float _simulatedLoadOhms = 10.0f; // Virtual load resistance in simulator mode
         private DateTime _startTime = DateTime.Now;
         private DateTime _lastSimTick = DateTime.Now;
         private DateTime _lastHwTelemetryTick = DateTime.Now;
+        private DateTime _lastCommandSentTime = DateTime.MinValue;
         private float _swAccumulatedAh = 0f;
         private float _swAccumulatedWh = 0f;
         private readonly List<float> _recentVoltages = new List<float>(24);
@@ -279,6 +284,9 @@ namespace FnirsiDps150Studio
 
             try
             {
+                _lastPortName = portName;
+                _lastBaudRate = baudRate;
+
                 _serialPort = new SerialPort(portName, baudRate, Parity.None, 8, StopBits.One)
                 {
                     ReadTimeout = 200,
@@ -296,8 +304,14 @@ namespace FnirsiDps150Studio
                 _isSimulated = false;
                 _isConnected = true;
                 _running = true;
-                _startTime = DateTime.Now;
+                if (!_timelineInitialized)
+                {
+                    _startTime = DateTime.Now;
+                    _timelineInitialized = true;
+                }
                 _lastHwTelemetryTick = DateTime.Now;
+
+                EnqueueHandshakeAndSyncPackets();
 
                 _workerThread = new Thread(WorkerLoop)
                 {
@@ -305,19 +319,6 @@ namespace FnirsiDps150Studio
                     Name = "DPS150_SerialWorker"
                 };
                 _workerThread.Start();
-
-                // Handshake sequence:
-                // 1. Enable session streaming (0xC1, type 0x00, data [0x01])
-                EnqueuePacket(BuildPacket(CMD_CONN, 0x00, new byte[] { 0x01 }));
-                // 2. Query Model, HW, FW, Input Limits (MaxV/MaxI) and Full State (0xFF)
-                EnqueuePacket(BuildPacket(CMD_GET, TYPE_MODEL, new byte[] { 0x00 }));
-                EnqueuePacket(BuildPacket(CMD_GET, TYPE_HW_VER, new byte[] { 0x00 }));
-                EnqueuePacket(BuildPacket(CMD_GET, TYPE_FW_VER, new byte[] { 0x00 }));
-                EnqueuePacket(BuildPacket(CMD_GET, TYPE_MAX_V, new byte[] { 0x00 }));
-                EnqueuePacket(BuildPacket(CMD_GET, TYPE_MAX_I, new byte[] { 0x00 }));
-                EnqueuePacket(BuildPacket(CMD_GET, TYPE_ALL, new byte[] { 0x00 }));
-                // 3. Automatically enable hardware Ah/Wh metering (0xD8 = 1) on DPS-150!
-                EnqueuePacket(BuildPacket(CMD_SET, TYPE_METERING, new byte[] { 0x01 }));
 
                 var handler = OnConnectionChanged;
                 if (handler != null) handler(true, string.Format("Połączono z {0} ({1} bps)", portName, baudRate));
@@ -341,6 +342,22 @@ namespace FnirsiDps150Studio
             }
         }
 
+        private void EnqueueHandshakeAndSyncPackets()
+        {
+            // Handshake sequence:
+            // 1. Enable session streaming (0xC1, type 0x00, data [0x01])
+            EnqueuePacket(BuildPacket(CMD_CONN, 0x00, new byte[] { 0x01 }));
+            // 2. Query Model, HW, FW, Input Limits (MaxV/MaxI) and Full State (0xFF)
+            EnqueuePacket(BuildPacket(CMD_GET, TYPE_MODEL, new byte[] { 0x00 }));
+            EnqueuePacket(BuildPacket(CMD_GET, TYPE_HW_VER, new byte[] { 0x00 }));
+            EnqueuePacket(BuildPacket(CMD_GET, TYPE_FW_VER, new byte[] { 0x00 }));
+            EnqueuePacket(BuildPacket(CMD_GET, TYPE_MAX_V, new byte[] { 0x00 }));
+            EnqueuePacket(BuildPacket(CMD_GET, TYPE_MAX_I, new byte[] { 0x00 }));
+            EnqueuePacket(BuildPacket(CMD_GET, TYPE_ALL, new byte[] { 0x00 }));
+            // 3. Automatically enable hardware Ah/Wh metering (0xD8 = 1) on DPS-150!
+            EnqueuePacket(BuildPacket(CMD_SET, TYPE_METERING, new byte[] { 0x01 }));
+        }
+
         public void StartSimulation()
         {
             Disconnect();
@@ -355,12 +372,17 @@ namespace FnirsiDps150Studio
                 _state.HardwareVersion = "V1.0";
                 _state.FirmwareVersion = "V1.2";
                 _state.Protection = ProtectionStatus.Normal;
+                _state.SettingsSyncVersion++;
             }
 
             _isSimulated = true;
             _isConnected = true;
             _running = true;
-            _startTime = DateTime.Now;
+            if (!_timelineInitialized)
+            {
+                _startTime = DateTime.Now;
+                _timelineInitialized = true;
+            }
             _lastSimTick = DateTime.Now;
 
             _workerThread = new Thread(SimulatorLoop)
@@ -426,6 +448,7 @@ namespace FnirsiDps150Studio
         {
             volts = Clamp(volts, 0f, 30.0f);
             lock (_stateLock) { _state.SetVoltage = volts; }
+            _lastCommandSentTime = DateTime.Now;
             if (!_isSimulated)
                 EnqueuePacket(BuildFloatPacket(CMD_SET, TYPE_VSET, volts));
         }
@@ -434,6 +457,7 @@ namespace FnirsiDps150Studio
         {
             amps = Clamp(amps, 0f, 5.0f);
             lock (_stateLock) { _state.SetCurrent = amps; }
+            _lastCommandSentTime = DateTime.Now;
             if (!_isSimulated)
                 EnqueuePacket(BuildFloatPacket(CMD_SET, TYPE_ISET, amps));
         }
@@ -451,6 +475,7 @@ namespace FnirsiDps150Studio
                         _state.Protection = ProtectionStatus.Normal;
                 }
             }
+            _lastCommandSentTime = DateTime.Now;
             if (!_isSimulated)
             {
                 EnqueuePacket(BuildPacket(CMD_SET, TYPE_OUT_EN, new byte[] { enabled ? (byte)1 : (byte)0 }));
@@ -478,6 +503,7 @@ namespace FnirsiDps150Studio
                 _state.OtpThreshold = otp;
                 _state.LvpThreshold = lvp;
             }
+            _lastCommandSentTime = DateTime.Now;
 
             if (!_isSimulated)
             {
@@ -499,6 +525,7 @@ namespace FnirsiDps150Studio
             {
                 _state.Presets[groupIndex1To6 - 1] = new MemoryPreset { Voltage = voltage, Current = current };
             }
+            _lastCommandSentTime = DateTime.Now;
 
             if (!_isSimulated)
             {
@@ -513,6 +540,7 @@ namespace FnirsiDps150Studio
         {
             level = (byte)Math.Min((int)level, 14);
             lock (_stateLock) { _state.Brightness = level; }
+            _lastCommandSentTime = DateTime.Now;
             if (!_isSimulated)
                 EnqueuePacket(BuildPacket(CMD_SET, TYPE_BRIGHTNESS, new byte[] { level }));
         }
@@ -521,6 +549,7 @@ namespace FnirsiDps150Studio
         {
             level = (byte)Math.Min((int)level, 10);
             lock (_stateLock) { _state.Volume = level; }
+            _lastCommandSentTime = DateTime.Now;
             if (!_isSimulated)
                 EnqueuePacket(BuildPacket(CMD_SET, TYPE_VOLUME, new byte[] { level }));
         }
@@ -528,6 +557,7 @@ namespace FnirsiDps150Studio
         public void SetMeteringEnabled(bool enabled)
         {
             lock (_stateLock) { _state.MeteringEnabled = enabled; }
+            _lastCommandSentTime = DateTime.Now;
             if (!_isSimulated)
                 EnqueuePacket(BuildPacket(CMD_SET, TYPE_METERING, new byte[] { enabled ? (byte)1 : (byte)0 }));
         }
@@ -616,8 +646,64 @@ namespace FnirsiDps150Studio
             byte[] readChunk = new byte[512];
             DateTime lastKeepAlive = DateTime.Now;
 
-            while (_running && _serialPort != null && _serialPort.IsOpen)
+            while (_running && !_isSimulated)
             {
+                // Auto-reconnect if USB serial port dropped unexpectedly while session is active
+                if (_serialPort == null || !_serialPort.IsOpen)
+                {
+                    if (_isConnected)
+                    {
+                        _isConnected = false;
+                        var dropHandler = OnConnectionChanged;
+                        if (dropHandler != null)
+                            dropHandler(false, "Przerwano połączenie USB — oczekiwanie na powrót zasilacza...");
+                    }
+
+                    Thread.Sleep(800);
+                    if (!_running || string.IsNullOrEmpty(_lastPortName))
+                        continue;
+
+                    try
+                    {
+                        if (_serialPort != null)
+                        {
+                            try { _serialPort.Dispose(); } catch { }
+                            _serialPort = null;
+                        }
+
+                        _serialPort = new SerialPort(_lastPortName, _lastBaudRate, Parity.None, 8, StopBits.One)
+                        {
+                            ReadTimeout = 200,
+                            WriteTimeout = 500,
+                            RtsEnable = true,
+                            DtrEnable = true,
+                            ReceivedBytesThreshold = 1
+                        };
+                        _serialPort.Open();
+                        _rxBuffer.Clear();
+                        byte[] dummy;
+                        while (_txQueue.TryDequeue(out dummy)) { }
+
+                        _isConnected = true;
+                        _lastHwTelemetryTick = DateTime.Now;
+                        lastKeepAlive = DateTime.Now;
+                        EnqueueHandshakeAndSyncPackets();
+
+                        var reconnHandler = OnConnectionChanged;
+                        if (reconnHandler != null)
+                            reconnHandler(true, string.Format("Ponownie połączono z {0} (zsynchronizowano)", _lastPortName));
+                    }
+                    catch
+                    {
+                        if (_serialPort != null)
+                        {
+                            try { _serialPort.Dispose(); } catch { }
+                            _serialPort = null;
+                        }
+                        continue;
+                    }
+                }
+
                 try
                 {
                     // 1. Send queued outgoing packets
@@ -647,11 +733,11 @@ namespace FnirsiDps150Studio
                         Thread.Sleep(10);
                     }
 
-                    // Periodic full state sync every 5 seconds if idle
+                    // Periodic full state sync every 5 seconds if idle (and not right after a local command)
                     if ((DateTime.Now - lastKeepAlive).TotalSeconds >= 5.0)
                     {
                         lastKeepAlive = DateTime.Now;
-                        if (_txQueue.IsEmpty)
+                        if (_txQueue.IsEmpty && (DateTime.Now - _lastCommandSentTime).TotalSeconds >= 1.5)
                         {
                             EnqueuePacket(BuildPacket(CMD_GET, TYPE_ALL, new byte[] { 0x00 }));
                         }
@@ -663,8 +749,15 @@ namespace FnirsiDps150Studio
                 }
                 catch (Exception)
                 {
+                    // Serial port disconnected or threw I/O error -> close handle so loop auto-reconnects
+                    if (_serialPort != null)
+                    {
+                        try { _serialPort.Close(); } catch { }
+                        try { _serialPort.Dispose(); } catch { }
+                        _serialPort = null;
+                    }
                     if (_running)
-                        Thread.Sleep(50);
+                        Thread.Sleep(200);
                 }
             }
         }
@@ -736,11 +829,21 @@ namespace FnirsiDps150Studio
                         break;
 
                     case TYPE_VSET: // 193
-                        if (len >= 4) _state.SetVoltage = ReadFloat(buf, offset);
+                        if (len >= 4)
+                        {
+                            _state.SetVoltage = ReadFloat(buf, offset);
+                            _state.SettingsSyncVersion++;
+                            triggerTelemetryEvent = true;
+                        }
                         break;
 
                     case TYPE_ISET: // 194
-                        if (len >= 4) _state.SetCurrent = ReadFloat(buf, offset);
+                        if (len >= 4)
+                        {
+                            _state.SetCurrent = ReadFloat(buf, offset);
+                            _state.SettingsSyncVersion++;
+                            triggerTelemetryEvent = true;
+                        }
                         break;
 
                     case TYPE_VIP_OUT: // 195 (12 bytes: Vout, Iout, Pout)
@@ -797,30 +900,32 @@ namespace FnirsiDps150Studio
                                 _state.Presets[group].Current = val;
                             else
                                 _state.Presets[group].Voltage = val;
+                            _state.SettingsSyncVersion++;
+                            triggerTelemetryEvent = true;
                         }
                         break;
 
                     case TYPE_OVP: // 209
-                        if (len >= 4) _state.OvpThreshold = ReadFloat(buf, offset);
+                        if (len >= 4) { _state.OvpThreshold = ReadFloat(buf, offset); _state.SettingsSyncVersion++; triggerTelemetryEvent = true; }
                         break;
                     case TYPE_OCP: // 210
-                        if (len >= 4) _state.OcpThreshold = ReadFloat(buf, offset);
+                        if (len >= 4) { _state.OcpThreshold = ReadFloat(buf, offset); _state.SettingsSyncVersion++; triggerTelemetryEvent = true; }
                         break;
                     case TYPE_OPP: // 211
-                        if (len >= 4) _state.OppThreshold = ReadFloat(buf, offset);
+                        if (len >= 4) { _state.OppThreshold = ReadFloat(buf, offset); _state.SettingsSyncVersion++; triggerTelemetryEvent = true; }
                         break;
                     case TYPE_OTP: // 212
-                        if (len >= 4) _state.OtpThreshold = ReadFloat(buf, offset);
+                        if (len >= 4) { _state.OtpThreshold = ReadFloat(buf, offset); _state.SettingsSyncVersion++; triggerTelemetryEvent = true; }
                         break;
                     case TYPE_LVP: // 213
-                        if (len >= 4) _state.LvpThreshold = ReadFloat(buf, offset);
+                        if (len >= 4) { _state.LvpThreshold = ReadFloat(buf, offset); _state.SettingsSyncVersion++; triggerTelemetryEvent = true; }
                         break;
 
                     case TYPE_BRIGHTNESS: // 214
-                        if (len >= 1) _state.Brightness = buf[offset];
+                        if (len >= 1) { _state.Brightness = buf[offset]; _state.SettingsSyncVersion++; triggerTelemetryEvent = true; }
                         break;
                     case TYPE_VOLUME: // 215
-                        if (len >= 1) _state.Volume = buf[offset];
+                        if (len >= 1) { _state.Volume = buf[offset]; _state.SettingsSyncVersion++; triggerTelemetryEvent = true; }
                         break;
                     case TYPE_METERING: // 216
                         if (len >= 1) _state.MeteringEnabled = buf[offset] != 0;
@@ -850,23 +955,26 @@ namespace FnirsiDps150Studio
                         break;
 
                     case TYPE_OUT_EN: // 219
-                        if (len >= 1) _state.OutputEnabled = buf[offset] != 0;
+                        if (len >= 1) { _state.OutputEnabled = buf[offset] != 0; triggerTelemetryEvent = true; }
                         break;
                     case TYPE_PROT: // 220
-                        if (len >= 1) _state.Protection = (ProtectionStatus)buf[offset];
+                        if (len >= 1) { _state.Protection = (ProtectionStatus)buf[offset]; triggerTelemetryEvent = true; }
                         break;
                     case TYPE_MODE: // 221
-                        if (len >= 1) _state.IsConstantVoltage = buf[offset] != 0;
+                        if (len >= 1) { _state.IsConstantVoltage = buf[offset] != 0; triggerTelemetryEvent = true; }
                         break;
 
                     case TYPE_MODEL: // 222
                         _state.ModelName = ReadAsciiString(buf, offset, len);
+                        _state.SettingsSyncVersion++;
                         break;
                     case TYPE_HW_VER: // 223
                         _state.HardwareVersion = ReadAsciiString(buf, offset, len);
+                        _state.SettingsSyncVersion++;
                         break;
                     case TYPE_FW_VER: // 224
                         _state.FirmwareVersion = ReadAsciiString(buf, offset, len);
+                        _state.SettingsSyncVersion++;
                         break;
 
                     case TYPE_MAX_V: // 225
@@ -933,6 +1041,8 @@ namespace FnirsiDps150Studio
             float allWh = ReadFloat(buf, o + 103);
             if (allAh > _state.CapacityAh) _state.CapacityAh = allAh;
             if (allWh > _state.EnergyWh) _state.EnergyWh = allWh;
+            _swAccumulatedAh = _state.CapacityAh;
+            _swAccumulatedWh = _state.EnergyWh;
 
             _state.OutputEnabled = buf[o + 107] != 0;
             _state.Protection = (ProtectionStatus)buf[o + 108];
@@ -947,6 +1057,8 @@ namespace FnirsiDps150Studio
                 if (allMaxI >= 0.1f && allMaxI <= 10.0f)
                     _state.MaxCurrentLimit = allMaxI;
             }
+
+            _state.SettingsSyncVersion++;
         }
 
         private void SimulatorLoop()

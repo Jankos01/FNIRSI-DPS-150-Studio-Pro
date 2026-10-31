@@ -156,7 +156,8 @@ namespace FnirsiDps150Studio
         private Label _lblBrightnessVal;
         private TrackBar _trkVolume;
         private Label _lblVolumeVal;
-        private bool _initialSettingsSynced;
+        private int _lastSyncedSettingsVersion = -1;
+        private bool _forceNextSettingsSync = true;
 
         // Sequence / Ramp Generator Tab
         private DataGridView _gridSeq;
@@ -1694,7 +1695,8 @@ namespace FnirsiDps150Studio
             _btnSyncFromDevice = CreateFlatButton("🔄 Odczytaj z zasilacza", new Size(175, 30), PanelDark);
             _btnSyncFromDevice.Click += (s, e) =>
             {
-                _initialSettingsSynced = false;
+                _forceNextSettingsSync = true;
+                _lastSyncedSettingsVersion = -1;
                 _driver.RefreshAllState();
             };
             btnRowFlow.Controls.Add(_btnSyncFromDevice);
@@ -2389,7 +2391,8 @@ namespace FnirsiDps150Studio
 
             int baud = 115200;
             int.TryParse(_cboBaud.Text, out baud);
-            _initialSettingsSynced = false;
+            _forceNextSettingsSync = true;
+            _lastSyncedSettingsVersion = -1;
             _driver.Connect(selected.PortName, baud);
         }
 
@@ -2401,7 +2404,8 @@ namespace FnirsiDps150Studio
             }
             else
             {
-                _initialSettingsSynced = false;
+                _forceNextSettingsSync = true;
+                _lastSyncedSettingsVersion = -1;
                 _driver.StartSimulation();
             }
         }
@@ -2414,6 +2418,8 @@ namespace FnirsiDps150Studio
                 bool en = _isEnglish;
                 if (connected)
                 {
+                    _forceNextSettingsSync = true;
+                    _lastSyncedSettingsVersion = -1;
                     _lblConnectionBadge.Text = _driver.IsSimulated
                         ? (en ? "● SIMULATOR" : "● SYMULATOR")
                         : (en ? "● CONNECTED" : "● POŁĄCZONO");
@@ -2556,38 +2562,54 @@ namespace FnirsiDps150Studio
                 _btnOutputToggle.FlatAppearance.BorderColor = Color.FromArgb(100, 116, 139);
             }
 
-            if (!_initialSettingsSynced && s.InputVoltage > 0.5f)
+            if ((_forceNextSettingsSync || s.SettingsSyncVersion != _lastSyncedSettingsVersion) && s.SettingsSyncVersion > 0)
             {
-                _initialSettingsSynced = true;
+                bool force = _forceNextSettingsSync;
+                _forceNextSettingsSync = false;
+                _lastSyncedSettingsVersion = s.SettingsSyncVersion;
                 _suppressSliderEvents = true;
                 try
                 {
-                    _nudVset.Value = ClampDec((decimal)s.SetVoltage, _nudVset.Minimum, _nudVset.Maximum);
-                    _trkVset.Value = Math.Max(0, Math.Min(3000, (int)Math.Round(s.SetVoltage * 100f)));
+                    if (force || (!_nudVset.Focused && !_trkVset.Focused))
+                    {
+                        _nudVset.Value = ClampDec((decimal)s.SetVoltage, _nudVset.Minimum, _nudVset.Maximum);
+                        _trkVset.Value = Math.Max(0, Math.Min(3000, (int)Math.Round(s.SetVoltage * 100f)));
+                    }
 
-                    _nudIset.Value = ClampDec((decimal)s.SetCurrent, _nudIset.Minimum, _nudIset.Maximum);
-                    _trkIset.Value = Math.Max(0, Math.Min(5000, (int)Math.Round(s.SetCurrent * 1000f)));
+                    if (force || (!_nudIset.Focused && !_trkIset.Focused))
+                    {
+                        _nudIset.Value = ClampDec((decimal)s.SetCurrent, _nudIset.Minimum, _nudIset.Maximum);
+                        _trkIset.Value = Math.Max(0, Math.Min(5000, (int)Math.Round(s.SetCurrent * 1000f)));
+                    }
 
-                    _nudOvp.Value = ClampDec((decimal)s.OvpThreshold, _nudOvp.Minimum, _nudOvp.Maximum);
-                    _nudOcp.Value = ClampDec((decimal)s.OcpThreshold, _nudOcp.Minimum, _nudOcp.Maximum);
-                    _nudOpp.Value = ClampDec((decimal)s.OppThreshold, _nudOpp.Minimum, _nudOpp.Maximum);
-                    _nudOtp.Value = ClampDec((decimal)s.OtpThreshold, _nudOtp.Minimum, _nudOtp.Maximum);
-                    _nudLvp.Value = ClampDec((decimal)s.LvpThreshold, _nudLvp.Minimum, _nudLvp.Maximum);
+                    if (force || !_nudOvp.Focused) _nudOvp.Value = ClampDec((decimal)s.OvpThreshold, _nudOvp.Minimum, _nudOvp.Maximum);
+                    if (force || !_nudOcp.Focused) _nudOcp.Value = ClampDec((decimal)s.OcpThreshold, _nudOcp.Minimum, _nudOcp.Maximum);
+                    if (force || !_nudOpp.Focused) _nudOpp.Value = ClampDec((decimal)s.OppThreshold, _nudOpp.Minimum, _nudOpp.Maximum);
+                    if (force || !_nudOtp.Focused) _nudOtp.Value = ClampDec((decimal)s.OtpThreshold, _nudOtp.Minimum, _nudOtp.Maximum);
+                    if (force || !_nudLvp.Focused) _nudLvp.Value = ClampDec((decimal)s.LvpThreshold, _nudLvp.Minimum, _nudLvp.Maximum);
 
                     for (int i = 0; i < 6; i++)
                     {
                         if (s.Presets[i].Voltage > 0.01f || s.Presets[i].Current > 0.001f)
                         {
-                            _nudPresetV[i].Value = ClampDec((decimal)s.Presets[i].Voltage, 0m, 30m);
-                            _nudPresetI[i].Value = ClampDec((decimal)s.Presets[i].Current, 0m, 5m);
+                            if (force || !_nudPresetV[i].Focused)
+                                _nudPresetV[i].Value = ClampDec((decimal)s.Presets[i].Voltage, 0m, 30m);
+                            if (force || !_nudPresetI[i].Focused)
+                                _nudPresetI[i].Value = ClampDec((decimal)s.Presets[i].Current, 0m, 5m);
                         }
                     }
 
-                    _trkBrightness.Value = Math.Max(_trkBrightness.Minimum, Math.Min(_trkBrightness.Maximum, (int)s.Brightness));
-                    _lblBrightnessVal.Text = _trkBrightness.Value + " / 14";
+                    if (force || !_trkBrightness.Focused)
+                    {
+                        _trkBrightness.Value = Math.Max(_trkBrightness.Minimum, Math.Min(_trkBrightness.Maximum, (int)s.Brightness));
+                        _lblBrightnessVal.Text = _trkBrightness.Value + " / 14";
+                    }
 
-                    _trkVolume.Value = Math.Max(_trkVolume.Minimum, Math.Min(_trkVolume.Maximum, (int)s.Volume));
-                    _lblVolumeVal.Text = _trkVolume.Value + " / 10";
+                    if (force || !_trkVolume.Focused)
+                    {
+                        _trkVolume.Value = Math.Max(_trkVolume.Minimum, Math.Min(_trkVolume.Maximum, (int)s.Volume));
+                        _lblVolumeVal.Text = _trkVolume.Value + " / 10";
+                    }
 
                     _lblDeviceInfo.Text = string.Format("{0} | FW:{1}", s.ModelName, s.FirmwareVersion);
                 }
@@ -3251,142 +3273,87 @@ namespace FnirsiDps150Studio
             float cx = bounds.Left + bounds.Width / 2f;
             float cy = bounds.Top + bounds.Height / 2f;
 
-            float chipW = bounds.Width * 0.84f;
-            float chipH = bounds.Height * 0.52f;
-            float chipLeft = cx - chipW / 2f;
-            float chipRight = cx + chipW / 2f;
-            float chipTop = cy - chipH / 2f;
-            float chipBottom = cy + chipH / 2f;
+            // Exact proportions from jankowski_dip_mono_white.svg (544 x 148 coordinate space)
+            float sx = (bounds.Width * 0.90f) / 544f;
+            float sy = (bounds.Height * 0.84f) / 148f;
 
-            float firstPinX = cx - chipW * 0.405f;
-            float lastPinX = cx + chipW * 0.405f;
-            float pinStep = (lastPinX - firstPinX) / 8f;
+            float strokeW = Math.Max(1.5f, 5.5f * sy);
+            Color cWhite = Color.FromArgb(255, 255, 255);
 
-            float padW = Math.Max(3.2f, chipW * 0.028f);
-            float padH = Math.Max(3.0f, bounds.Height * 0.095f);
-            float pinLeadLen = Math.Max(4.5f, bounds.Height * 0.15f);
-
-            Color cBg = Color.FromArgb(11, 15, 25);
-            Color cChipFill = Color.FromArgb(17, 24, 39);
-            Color cCyan = Color.FromArgb(56, 189, 248);
-            Color cPinPad = Color.FromArgb(148, 163, 184);
-            Color cAmber = Color.FromArgb(245, 158, 11);
-            Color cPinNum = Color.FromArgb(100, 116, 139);
-
-            using (Pen penPad = new Pen(cPinPad, 1.3f))
-            using (Pen penActive = new Pen(cCyan, 1.4f))
-            using (Brush brBg = new SolidBrush(cBg))
+            using (Pen penWhite = new Pen(cWhite, strokeW))
+            using (Brush brWhite = new SolidBrush(cWhite))
             {
+                penWhite.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                penWhite.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                penWhite.LineJoin = System.Drawing.Drawing2D.LineJoin.Round;
+
+                // 1. 9 Top Pins & 9 Bottom Pins (x = -216..+216 step 54, y = +/-52 to +/-74)
+                float pinTopIn = cy - 52f * sy;
+                float pinTopOut = cy - 74f * sy;
+                float pinBotIn = cy + 52f * sy;
+                float pinBotOut = cy + 74f * sy;
+
                 for (int i = 0; i < 9; i++)
                 {
-                    float px = firstPinX + i * pinStep;
-
-                    // Top pins (18 down to 10)
-                    if (i == 0)
-                    {
-                        // Pin 18 Active PCB Trace + Via
-                        float vy = chipTop - pinLeadLen - 2.5f;
-                        float vx = px - 3.5f;
-                        g.DrawLine(penActive, px, chipTop, px, chipTop - pinLeadLen + 1f);
-                        g.DrawLine(penActive, px, chipTop - pinLeadLen + 1f, vx, vy);
-                        g.FillEllipse(brBg, vx - 1.8f, vy - 1.8f, 3.6f, 3.6f);
-                        g.DrawEllipse(penActive, vx - 1.8f, vy - 1.8f, 3.6f, 3.6f);
-                    }
-                    else
-                    {
-                        g.DrawLine(penPad, px, chipTop, px, chipTop - pinLeadLen);
-                    }
-                    g.DrawRectangle(penPad, px - padW / 2f, chipTop - padH, padW, padH);
-
-                    // Bottom pins (1 to 9)
-                    if (i == 8)
-                    {
-                        // Pin 9 Active PCB Trace + Via
-                        float vy = chipBottom + pinLeadLen + 2.5f;
-                        float vx = px + 3.5f;
-                        g.DrawLine(penActive, px, chipBottom, px, chipBottom + pinLeadLen - 1f);
-                        g.DrawLine(penActive, px, chipBottom + pinLeadLen - 1f, vx, vy);
-                        g.FillEllipse(brBg, vx - 1.8f, vy - 1.8f, 3.6f, 3.6f);
-                        g.DrawEllipse(penActive, vx - 1.8f, vy - 1.8f, 3.6f, 3.6f);
-                    }
-                    else
-                    {
-                        g.DrawLine(penPad, px, chipBottom, px, chipBottom + pinLeadLen);
-                    }
-                    g.DrawRectangle(penPad, px - padW / 2f, chipBottom, padW, padH);
+                    float px = cx + (-216f + i * 54f) * sx;
+                    g.DrawLine(penWhite, px, pinTopIn, px, pinTopOut);
+                    g.DrawLine(penWhite, px, pinBotIn, px, pinBotOut);
                 }
 
-                // DIP-18 Body
-                using (Brush brChip = new SolidBrush(cChipFill))
-                using (Pen penChip = new Pen(cCyan, 1.5f))
+                // 2. Left Bracket with Half-Circle Notch:
+                // M -236,-52 L -272,-52 L -272,-18 A 18,18 0 0,1 -272,18 L -272,52 L -236,52
+                float leftOut = cx - 272f * sx;
+                float leftIn = cx - 236f * sx;
+                float byTop = cy - 52f * sy;
+                float byBot = cy + 52f * sy;
+                float notchRx = Math.Max(2.8f, 18f * sx);
+                float notchRy = Math.Max(2.8f, 18f * sy);
+
+                using (var leftPath = new System.Drawing.Drawing2D.GraphicsPath())
                 {
-                    g.FillRectangle(brChip, chipLeft, chipTop, chipW, chipH);
-                    g.DrawRectangle(penChip, chipLeft, chipTop, chipW, chipH);
-
-                    // Half-Moon Pin-1 Orientation Notch on Left Edge
-                    float notchR = Math.Max(3.2f, chipH * 0.19f);
-                    g.FillEllipse(brBg, chipLeft - notchR, cy - notchR, notchR * 2f, notchR * 2f);
-                    g.DrawArc(penChip, chipLeft - notchR, cy - notchR, notchR * 2f, notchR * 2f, -90f, 180f);
-                    // Cover the vertical border line inside the notch opening
-                    using (Pen penCover = new Pen(cBg, 2.0f))
-                    {
-                        g.DrawLine(penCover, chipLeft, cy - notchR + 1f, chipLeft, cy + notchR - 1f);
-                    }
+                    leftPath.AddLine(leftIn, byTop, leftOut, byTop);
+                    leftPath.AddLine(leftOut, byTop, leftOut, cy - notchRy);
+                    leftPath.AddArc(leftOut - notchRx, cy - notchRy, notchRx * 2f, notchRy * 2f, -90f, 180f);
+                    leftPath.AddLine(leftOut, cy + notchRy, leftOut, byBot);
+                    leftPath.AddLine(leftOut, byBot, leftIn, byBot);
+                    g.DrawPath(penWhite, leftPath);
                 }
 
-                // Pin 1 Amber Dot Indicator
-                float dotR = Math.Max(1.6f, chipH * 0.085f);
-                using (Brush brAmber = new SolidBrush(cAmber))
+                // 3. Right Bracket:
+                // M 236,-52 L 272,-52 L 272,52 L 236,52
+                float rightIn = cx + 236f * sx;
+                float rightOut = cx + 272f * sx;
+                using (var rightPath = new System.Drawing.Drawing2D.GraphicsPath())
                 {
-                    g.FillEllipse(brAmber, chipLeft + notchRadiusOffset(chipH) - dotR, chipBottom - dotR * 2.7f, dotR * 2f, dotR * 2f);
+                    rightPath.AddLine(rightIn, byTop, rightOut, byTop);
+                    rightPath.AddLine(rightOut, byTop, rightOut, byBot);
+                    rightPath.AddLine(rightOut, byBot, rightIn, byBot);
+                    g.DrawPath(penWhite, rightPath);
                 }
 
-                // Corner Pin Numbers (18, 10, 1, 9) when tall enough
-                if (chipH >= 19f)
-                {
-                    using (Font fNum = new Font("Consolas", 5.2f, FontStyle.Bold))
-                    using (Brush brNum = new SolidBrush(cPinNum))
-                    using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-                    {
-                        g.DrawString("18", fNum, brNum, firstPinX, chipTop + 3.5f, sf);
-                        g.DrawString("10", fNum, brNum, lastPinX, chipTop + 3.5f, sf);
-                        g.DrawString("1", fNum, brNum, firstPinX, chipBottom - 3.5f, sf);
-                        g.DrawString("9", fNum, brNum, lastPinX, chipBottom - 3.5f, sf);
-                    }
-                }
+                // 4. Pin 1 White Dot at (-248, 30)
+                float dotX = cx - 248f * sx;
+                float dotY = cy + 30f * sy;
+                float dotR = Math.Max(1.5f, 5.0f * sy);
+                g.FillEllipse(brWhite, dotX - dotR, dotY - dotR, dotR * 2f, dotR * 2f);
 
-                // 9 Letters J-A-N-K-O-W-S-K-I aligned with the 9 pin columns
+                // 5. Bold White Wordmark J-A-N-K-O-W-S-K-I aligned with the 9 pin columns
                 string word = "JANKOWSKI";
-                float fontSize = Math.Max(6.5f, Math.Min(9.8f, chipH * 0.42f));
+                float fontSize = Math.Max(6.5f, Math.Min(10.5f, 38f * sy));
                 using (Font fLetter = new Font("Segoe UI", fontSize, FontStyle.Bold))
-                using (Brush brLetter = new SolidBrush(Color.FromArgb(248, 250, 252)))
                 using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 {
                     for (int i = 0; i < 9; i++)
                     {
-                        float px = firstPinX + i * pinStep;
-                        g.DrawString(word[i].ToString(), fLetter, brLetter, px, cy + 0.5f, sf);
+                        float px = cx + (-216f + i * 54f) * sx;
+                        g.DrawString(word[i].ToString(), fLetter, brWhite, px, cy + 0.5f, sf);
                     }
                 }
             }
         }
 
-        private static float notchRadiusOffset(float chipH)
-        {
-            return Math.Max(5.5f, chipH * 0.28f);
-        }
-
         private static Icon CreateCustomLogoIcon()
         {
-            try
-            {
-                Icon exeIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-                if (exeIcon != null) return exeIcon;
-            }
-            catch
-            {
-            }
-
             try
             {
                 using (Bitmap bmp = new Bitmap(32, 32))
