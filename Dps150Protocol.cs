@@ -870,10 +870,18 @@ namespace FnirsiDps150Studio
                         break;
 
                     case TYPE_MAX_V: // 225
-                        if (len >= 4) _state.MaxVoltageLimit = ReadFloat(buf, offset);
+                        if (len >= 4)
+                        {
+                            float mv = ReadFloat(buf, offset);
+                            if (mv >= 0.5f && mv <= 35.0f) _state.MaxVoltageLimit = mv;
+                        }
                         break;
                     case TYPE_MAX_I: // 226
-                        if (len >= 4) _state.MaxCurrentLimit = ReadFloat(buf, offset);
+                        if (len >= 4)
+                        {
+                            float mi = ReadFloat(buf, offset);
+                            if (mi >= 0.1f && mi <= 10.0f) _state.MaxCurrentLimit = mi;
+                        }
                         break;
 
                     case TYPE_ALL: // 255 (Full 139-byte state block)
@@ -930,10 +938,14 @@ namespace FnirsiDps150Studio
             _state.Protection = (ProtectionStatus)buf[o + 108];
             _state.IsConstantVoltage = buf[o + 109] != 0;
 
-            if (len >= 139)
+            if (len >= 119)
             {
-                _state.MaxVoltageLimit = ReadFloat(buf, o + 131);
-                _state.MaxCurrentLimit = ReadFloat(buf, o + 135);
+                float allMaxV = ReadFloat(buf, o + 111);
+                float allMaxI = ReadFloat(buf, o + 115);
+                if (allMaxV >= 0.5f && allMaxV <= 35.0f)
+                    _state.MaxVoltageLimit = allMaxV;
+                if (allMaxI >= 0.1f && allMaxI <= 10.0f)
+                    _state.MaxCurrentLimit = allMaxI;
             }
         }
 
