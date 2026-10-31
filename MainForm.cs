@@ -94,9 +94,13 @@ namespace FnirsiDps150Studio
         private NumericUpDown _nudChgMaxMah;
         private Button _btnChgStart;
         private Button _btnChgStop;
+        private readonly Panel[] _pnlStageBox = new Panel[5];
+        private readonly Label[] _lblStageBox = new Label[5];
         private Label _lblChgStatusBanner;
         private Label _lblChgLiveMetrics;
         private bool _chargerActive = false;
+        private int _chgStage = 0; // 0=Idle, 1=Pre-Charge, 2=Soft-Start, 3=Bulk CC, 4=Absorption CV, 5=Float/Cutoff
+        private int _chgSoftStartTick = 0;
         private int _chgCutoffConfirmTicks = 0;
         private float _chgStartAh = 0f;
         private float _chgStartWh = 0f;
@@ -1174,36 +1178,71 @@ namespace FnirsiDps150Studio
             chgLayout.Controls.Add(paramsGrid, 0, 3);
             chgLayout.SetColumnSpan(paramsGrid, 2);
 
+            // 5-Stage Charging Profile Indicator Strip
+            var stageStrip = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 42,
+                ColumnCount = 5,
+                RowCount = 1,
+                Margin = new Padding(0, 2, 0, 4)
+            };
+            for (int st = 0; st < 5; st++)
+            {
+                stageStrip.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20f));
+                var pBox = new Panel
+                {
+                    Dock = DockStyle.Fill,
+                    BackColor = PanelDark,
+                    Margin = new Padding(st == 0 ? 0 : 2, 1, st == 4 ? 0 : 2, 1),
+                    BorderStyle = BorderStyle.FixedSingle
+                };
+                var lBox = new Label
+                {
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    ForeColor = TextMuted,
+                    Font = new Font("Consolas", 7.8f, FontStyle.Bold),
+                    Text = "ETAP " + (st + 1)
+                };
+                pBox.Controls.Add(lBox);
+                _pnlStageBox[st] = pBox;
+                _lblStageBox[st] = lBox;
+                stageStrip.Controls.Add(pBox, st, 0);
+            }
+            chgLayout.Controls.Add(stageStrip, 0, 4);
+            chgLayout.SetColumnSpan(stageStrip, 2);
+
             var chgBtnFlow = new FlowLayoutPanel
             {
                 AutoSize = true,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
-                Margin = new Padding(0, 4, 0, 6)
+                Margin = new Padding(0, 2, 0, 4)
             };
 
-            _btnChgStart = CreateFlatButton("▶ START ŁADOWANIA (CC/CV)", new Size(235, 32), AccentGreen);
+            _btnChgStart = CreateFlatButton("▶ START ŁADOWANIA (5-ETAPOWE)", new Size(245, 30), AccentGreen);
             _btnChgStart.Margin = new Padding(0, 0, 8, 0);
             _btnChgStart.Click += (s, e) => StartBatteryCharger();
             chgBtnFlow.Controls.Add(_btnChgStart);
 
-            _btnChgStop = CreateFlatButton("⏹ ZATRZYMAJ ŁADOWANIE", new Size(195, 32), Color.FromArgb(127, 29, 29));
+            _btnChgStop = CreateFlatButton("⏹ ZATRZYMAJ ŁADOWANIE", new Size(195, 30), Color.FromArgb(127, 29, 29));
             _btnChgStop.Enabled = false;
             _btnChgStop.Click += (s, e) => StopBatteryCharger(false, "");
             chgBtnFlow.Controls.Add(_btnChgStop);
 
-            chgLayout.Controls.Add(chgBtnFlow, 0, 4);
+            chgLayout.Controls.Add(chgBtnFlow, 0, 5);
             chgLayout.SetColumnSpan(chgBtnFlow, 2);
 
             _lblChgStatusBanner = new Label
             {
                 Text = "Status ładowarki: GOTOWY (Wybierz 1S–7S i kliknij START)",
                 AutoSize = true,
-                Margin = new Padding(0, 2, 0, 4),
+                Margin = new Padding(0, 2, 0, 3),
                 ForeColor = AccentAmber,
-                Font = new Font("Consolas", 9.5f, FontStyle.Bold)
+                Font = new Font("Consolas", 9.0f, FontStyle.Bold)
             };
-            chgLayout.Controls.Add(_lblChgStatusBanner, 0, 5);
+            chgLayout.Controls.Add(_lblChgStatusBanner, 0, 6);
             chgLayout.SetColumnSpan(_lblChgStatusBanner, 2);
 
             _lblChgLiveMetrics = new Label
@@ -1212,10 +1251,12 @@ namespace FnirsiDps150Studio
                 AutoSize = true,
                 Margin = new Padding(0, 0, 0, 2),
                 ForeColor = TextLight,
-                Font = new Font("Consolas", 9.0f, FontStyle.Regular)
+                Font = new Font("Consolas", 8.8f, FontStyle.Regular)
             };
-            chgLayout.Controls.Add(_lblChgLiveMetrics, 0, 6);
+            chgLayout.Controls.Add(_lblChgLiveMetrics, 0, 7);
             chgLayout.SetColumnSpan(_lblChgLiveMetrics, 2);
+
+            UpdateChargerStageStripUi();
 
             leftCard.Controls.Add(chgLayout);
 
@@ -2229,9 +2270,10 @@ namespace FnirsiDps150Studio
                 _lblChgITitle.Text = en ? "Charge Current CC [A]:" : "Prąd ładowania CC [A]:";
                 _lblChgCutoffTitle.Text = en ? "CV Cutoff Current [A]:" : "Prąd odcięcia CV [A]:";
                 _lblChgMaxMahTitle.Text = en ? "Max Capacity [mAh] (0=Off):" : "Limit mAh (0=Brak):";
-                _btnChgStart.Text = en ? "▶ START CHARGING (CC/CV)" : "▶ START ŁADOWANIA (CC/CV)";
+                _btnChgStart.Text = en ? "▶ START CHARGING (5-STAGE)" : "▶ START ŁADOWANIA (5-ETAPOWE)";
                 _btnChgStop.Text = en ? "⏹ STOP CHARGING" : "⏹ ZATRZYMAJ ŁADOWANIE";
-                if (!_chargerActive)
+                UpdateChargerStageStripUi();
+                if (!_chargerActive && _chgStage != 5)
                 {
                     _lblChgStatusBanner.Text = en
                         ? "Charger status: READY (Select 1S–7S and click START)"
@@ -2485,10 +2527,35 @@ namespace FnirsiDps150Studio
             }
             else if (_chargerActive)
             {
-                _lblModeBadge.Text = s.IsConstantVoltage
-                    ? (en ? "🔋 CHG (CV)" : "🔋 ŁAD. (CV)")
-                    : (en ? "🔋 CHG (CC)" : "🔋 ŁAD. (CC)");
-                _lblModeBadge.ForeColor = AccentCyan;
+                switch (_chgStage)
+                {
+                    case 1:
+                        _lblModeBadge.Text = en ? "E1: PRE-CHARGE" : "E1: PRE-CHARGE";
+                        _lblModeBadge.ForeColor = AccentAmber;
+                        break;
+                    case 2:
+                        _lblModeBadge.Text = en ? "E2: SOFT-START" : "E2: SOFT-START";
+                        _lblModeBadge.ForeColor = AccentCyan;
+                        break;
+                    case 3:
+                        _lblModeBadge.Text = en ? "E3: BULK (CC)" : "E3: BULK (CC)";
+                        _lblModeBadge.ForeColor = AccentAmber;
+                        break;
+                    case 4:
+                        _lblModeBadge.Text = en ? "E4: ABSORP (CV)" : "E4: ABSORP (CV)";
+                        _lblModeBadge.ForeColor = AccentCyan;
+                        break;
+                    case 5:
+                        _lblModeBadge.Text = en ? "E5: FLOAT (PB)" : "E5: FLOAT (PB)";
+                        _lblModeBadge.ForeColor = AccentGreen;
+                        break;
+                    default:
+                        _lblModeBadge.Text = s.IsConstantVoltage
+                            ? (en ? "CHG (CV)" : "ŁAD. (CV)")
+                            : (en ? "CHG (CC)" : "ŁAD. (CC)");
+                        _lblModeBadge.ForeColor = AccentCyan;
+                        break;
+                }
             }
             else if (s.IsConstantVoltage)
             {
@@ -2721,14 +2788,109 @@ namespace FnirsiDps150Studio
 
             if (!_chargerActive && _lblChgStatusBanner != null)
             {
+                _chgStage = 0;
+                UpdateChargerStageStripUi();
                 float nomPack = _selectedCellCount * nomPerCell;
                 _lblChgStatusBanner.Text = string.Format(
                     CultureInfo.InvariantCulture,
                     _isEnglish
-                        ? "Ready: Pack {0}S ({1:0.0}V nom. → Charge to {2:0.00}V, CC={3:0.00}A, Cutoff={4:0.000}A)"
-                        : "Gotowy: Pakiet {0}S ({1:0.0}V nom. → Ładowanie do {2:0.00}V, CC={3:0.00}A, Stop={4:0.000}A)",
+                        ? "Ready: Pack {0}S ({1:0.0}V nom. -> Target {2:0.00}V, CC={3:0.00}A, Cutoff={4:0.000}A)"
+                        : "Gotowy: Pakiet {0}S ({1:0.0}V nom. -> Cel {2:0.00}V, CC={3:0.00}A, Stop={4:0.000}A)",
                     _selectedCellCount, nomPack, targetV, _nudChgCurrent.Value, _nudChgCutoffCurrent.Value);
                 _lblChgStatusBanner.ForeColor = AccentAmber;
+            }
+        }
+
+        private void UpdateChargerStageStripUi()
+        {
+            if (_lblStageBox[0] == null) return;
+            bool en = _isEnglish;
+            bool isLeadAcid = (_cboBattChem != null && _cboBattChem.SelectedIndex == 3);
+
+            string[] titlesPl = new string[]
+            {
+                "ETAP 1: PRE-CHARGE\r\nWybudzanie (0.15C)",
+                "ETAP 2: SOFT-START\r\nNarastanie prądu",
+                "ETAP 3: BULK (CC)\r\nStały Prąd główny",
+                "ETAP 4: ABSORP. (CV)\r\nStałe Napięcie",
+                isLeadAcid ? "ETAP 5: FLOAT (PB)\r\nBufor 2.25V/ogn." : "ETAP 5: AUTO-STOP\r\nOdcięcie 100%"
+            };
+
+            string[] titlesEn = new string[]
+            {
+                "STAGE 1: PRE-CHARGE\r\nWake-up (0.15C)",
+                "STAGE 2: SOFT-START\r\nCurrent Ramp",
+                "STAGE 3: BULK (CC)\r\nConstant Current",
+                "STAGE 4: ABSORP. (CV)\r\nConstant Voltage",
+                isLeadAcid ? "STAGE 5: FLOAT (PB)\r\nBuffer 2.25V/cell" : "STAGE 5: AUTO-STOP\r\nCutoff 100%"
+            };
+
+            for (int i = 0; i < 5; i++)
+            {
+                int stageNum = i + 1;
+                string baseText = en ? titlesEn[i] : titlesPl[i];
+
+                if (_chgStage == 0)
+                {
+                    _pnlStageBox[i].BackColor = PanelDark;
+                    _lblStageBox[i].ForeColor = TextMuted;
+                    _lblStageBox[i].Text = baseText;
+                }
+                else if (stageNum < _chgStage)
+                {
+                    _pnlStageBox[i].BackColor = Color.FromArgb(6, 78, 59);
+                    _lblStageBox[i].ForeColor = AccentGreen;
+                    _lblStageBox[i].Text = "[OK] " + baseText;
+                }
+                else if (stageNum == _chgStage)
+                {
+                    if (stageNum == 1)
+                    {
+                        _pnlStageBox[i].BackColor = Color.FromArgb(146, 64, 14);
+                        _lblStageBox[i].ForeColor = AccentAmber;
+                    }
+                    else if (stageNum == 2)
+                    {
+                        _pnlStageBox[i].BackColor = Color.FromArgb(30, 58, 138);
+                        _lblStageBox[i].ForeColor = AccentCyan;
+                    }
+                    else if (stageNum == 3)
+                    {
+                        _pnlStageBox[i].BackColor = Color.FromArgb(180, 83, 9);
+                        _lblStageBox[i].ForeColor = Color.White;
+                    }
+                    else if (stageNum == 4)
+                    {
+                        _pnlStageBox[i].BackColor = Color.FromArgb(3, 105, 161);
+                        _lblStageBox[i].ForeColor = Color.White;
+                    }
+                    else
+                    {
+                        _pnlStageBox[i].BackColor = Color.FromArgb(5, 150, 105);
+                        _lblStageBox[i].ForeColor = Color.White;
+                    }
+                    _lblStageBox[i].Text = ">> " + baseText;
+                }
+                else
+                {
+                    _pnlStageBox[i].BackColor = PanelDark;
+                    _lblStageBox[i].ForeColor = TextMuted;
+                    _lblStageBox[i].Text = baseText;
+                }
+            }
+        }
+
+        private float GetPreChargeThresholdPerCell()
+        {
+            if (_cboBattChem == null) return 2.90f;
+            switch (_cboBattChem.SelectedIndex)
+            {
+                case 0: return 2.90f; // Li-Ion / Li-Po 3.7V
+                case 1: return 2.95f; // Li-Ion HV 3.8V
+                case 2: return 2.50f; // LiFePO4 3.2V
+                case 3: return 1.75f; // Lead-Acid Pb / AGM 2.0V
+                case 4: return 1.00f; // NiMH / NiCd 1.2V
+                default: return 2.90f;
             }
         }
 
@@ -2757,6 +2919,8 @@ namespace FnirsiDps150Studio
             }
 
             _chargerActive = true;
+            _chgStage = 1; // Start at Stage 1 (Pre-Charge check) -> Stage 2 (Soft-Start)
+            _chgSoftStartTick = 0;
             _chgCutoffConfirmTicks = 0;
             _chgStartAh = snap.CapacityAh;
             _chgStartWh = snap.EnergyWh;
@@ -2765,17 +2929,20 @@ namespace FnirsiDps150Studio
             _btnChgStart.Enabled = false;
             _btnChgStop.Enabled = true;
 
+            // Start with safe Pre-Charge / Soft-Start initial current (15% of CC target)
+            float initialI = Math.Max(0.05f, Math.Min(0.30f, chargeI * 0.15f));
             ApplyVoltageTarget(chargeV);
-            ApplyCurrentTarget(chargeI);
+            ApplyCurrentTarget(initialI);
             _driver.SetOutputEnabled(true);
+            UpdateChargerStageStripUi();
 
             _lblChgStatusBanner.Text = string.Format(
                 CultureInfo.InvariantCulture,
                 _isEnglish
-                    ? "🔋 CHARGING STARTED ({0}S): Target {1:0.00}V @ {2:0.000}A (Auto-Cutoff <= {3:0.000}A)"
-                    : "🔋 ŁADOWANIE AKTYWNE ({0}S): Cel {1:0.00}V @ {2:0.000}A (Auto-Stop <= {3:0.000}A)",
-                _selectedCellCount, chargeV, chargeI, _nudChgCutoffCurrent.Value);
-            _lblChgStatusBanner.ForeColor = AccentCyan;
+                    ? "STAGE 1/5 [PRE-CHARGE — Checking cell voltage]: U_end={0:0.00}V, I_init={1:0.000}A"
+                    : "ETAP 1/5 [PRE-CHARGE — Kontrola napięcia ogniw]: U_konc={0:0.00}V, I_start={1:0.000}A",
+                chargeV, initialI);
+            _lblChgStatusBanner.ForeColor = AccentAmber;
         }
 
         private void StopBatteryCharger(bool turnOffOutput, string customMessage)
@@ -2789,6 +2956,12 @@ namespace FnirsiDps150Studio
             {
                 _driver.SetOutputEnabled(false);
             }
+
+            if (string.IsNullOrEmpty(customMessage))
+            {
+                _chgStage = 0;
+            }
+            UpdateChargerStageStripUi();
 
             if (_lblChgStatusBanner != null)
             {
@@ -2891,12 +3064,14 @@ namespace FnirsiDps150Studio
                 }
             }
 
-            // 2. Battery Charger (1S - 7S CC/CV + Auto-Cutoff)
+            // 2. 5-Stage Battery Charger Profile Engine (1S - 7S)
             if (_chargerActive)
             {
                 float targetV = (float)_nudChgVoltage.Value;
+                float targetI = (float)_nudChgCurrent.Value;
                 float cutoffI = (float)_nudChgCutoffCurrent.Value;
                 float maxMah = (float)_nudChgMaxMah.Value;
+                bool isLeadAcid = (_cboBattChem != null && _cboBattChem.SelectedIndex == 3);
 
                 float chargedMah = Math.Max(0f, (s.CapacityAh - _chgStartAh) * 1000f);
                 float chargedWh = Math.Max(0f, s.EnergyWh - _chgStartWh);
@@ -2912,9 +3087,10 @@ namespace FnirsiDps150Studio
 
                 if (!s.OutputEnabled && elapsed.TotalSeconds > 2.0)
                 {
+                    _chgStage = 0;
                     StopBatteryCharger(false, en
-                        ? "⚠️ Charger paused: Output was turned OFF"
-                        : "⚠️ Ładowanie przerwane: Wyjście zasilacza zostało wyłączone");
+                        ? "Charger paused: Output was turned OFF"
+                        : "Ładowanie przerwane: Wyjście zasilacza zostało wyłączone");
                     _lblChgStatusBanner.ForeColor = AccentRed;
                     return;
                 }
@@ -2922,50 +3098,147 @@ namespace FnirsiDps150Studio
                 // Check Max mAh safety cutoff
                 if (maxMah > 0f && chargedMah >= maxMah)
                 {
+                    _chgStage = 5;
                     StopBatteryCharger(true, string.Format(
                         CultureInfo.InvariantCulture,
                         en
-                            ? "✅ CHARGING COMPLETE: Reached capacity limit {0:0} mAh (Output turned OFF!)"
-                            : "✅ KONIEC ŁADOWANIA: Osiągnięto limit pojemności {0:0} mAh (Wyjście wyłączone!)",
+                            ? "STAGE 5/5 [AUTO-STOP — Capacity Limit]: Reached {0:0} mAh (Output OFF)"
+                            : "ETAP 5/5 [AUTO-STOP — Limit Pojemności]: Osiągnięto {0:0} mAh (Wyjście OFF)",
                         chargedMah));
                     return;
                 }
 
-                // Check CV phase & current cutoff (5 seconds confirmation = 20 ticks * 250ms)
-                bool nearTargetVoltage = s.OutputVoltage >= (targetV - 0.08f);
+                // Stage 5: Float maintenance mode for Lead-Acid (Pb / AGM)
+                if (_chgStage == 5 && isLeadAcid)
+                {
+                    float floatV = _selectedCellCount * 2.25f;
+                    if (Math.Abs(s.SetVoltage - floatV) > 0.03f)
+                        ApplyVoltageTarget(floatV);
+
+                    _lblChgStatusBanner.Text = string.Format(
+                        CultureInfo.InvariantCulture,
+                        en
+                            ? "STAGE 5/5 [FLOAT — Lead-Acid Maintenance]: U_float={0:0.00}V ({1:0.00}V/cell), I={2:0.000}A (+{3:0} mAh)"
+                            : "ETAP 5/5 [FLOAT — Konserwacja buforowa Pb/AGM]: U_bufor={0:0.00}V ({1:0.00}V/ogn.), I={2:0.000}A (+{3:0} mAh)",
+                        s.OutputVoltage, cellV, s.OutputCurrent, chargedMah);
+                    _lblChgStatusBanner.ForeColor = AccentGreen;
+                    UpdateChargerStageStripUi();
+                    return;
+                }
+
+                float preChargeCellMin = GetPreChargeThresholdPerCell();
+
+                // Stage 1: PRE-CHARGE (Wake-up deeply discharged cells with 15% current)
+                if (_chgStage == 1)
+                {
+                    float preI = Math.Max(0.05f, Math.Min(0.30f, targetI * 0.15f));
+                    if (elapsed.TotalSeconds < 0.8 || (s.OutputVoltage > 0.25f && cellV < preChargeCellMin))
+                    {
+                        if (Math.Abs(s.SetCurrent - preI) > 0.015f)
+                            ApplyCurrentTarget(preI);
+
+                        _lblChgStatusBanner.Text = string.Format(
+                            CultureInfo.InvariantCulture,
+                            en
+                                ? "STAGE 1/5 [PRE-CHARGE — Cell Wake-up]: I_lim={0:0.000}A, U={1:0.00}V ({2:0.00}V/cell < {3:0.00}V)"
+                                : "ETAP 1/5 [PRE-CHARGE — Wybudzanie ogniw]: I_lim={0:0.000}A, U={1:0.00}V ({2:0.00}V/ogn. < {3:0.00}V)",
+                            preI, s.OutputVoltage, cellV, preChargeCellMin);
+                        _lblChgStatusBanner.ForeColor = AccentAmber;
+                        UpdateChargerStageStripUi();
+                        return;
+                    }
+                    else
+                    {
+                        // Cell voltage is safe -> transition to Stage 2 (Soft-Start)
+                        _chgStage = 2;
+                        _chgSoftStartTick = 0;
+                        UpdateChargerStageStripUi();
+                    }
+                }
+
+                // Stage 2: SOFT-START (Smooth current ramp over 3 seconds / 12 ticks)
+                if (_chgStage == 2)
+                {
+                    _chgSoftStartTick++;
+                    float ratio = Math.Min(1.0f, _chgSoftStartTick / 12.0f);
+                    float rampI = Math.Max(0.05f, targetI * (0.20f + 0.80f * ratio));
+                    ApplyCurrentTarget(rampI);
+
+                    _lblChgStatusBanner.Text = string.Format(
+                        CultureInfo.InvariantCulture,
+                        en
+                            ? "STAGE 2/5 [SOFT-START — Current Ramp]: {0:0}% ({1:0.000}A -> {2:0.000}A) @ U={3:0.00}V"
+                            : "ETAP 2/5 [SOFT-START — Narastanie prądu]: {0:0}% ({1:0.000}A -> {2:0.000}A) @ U={3:0.00}V",
+                        ratio * 100f, rampI, targetI, s.OutputVoltage);
+                    _lblChgStatusBanner.ForeColor = AccentCyan;
+                    UpdateChargerStageStripUi();
+
+                    if (_chgSoftStartTick >= 12)
+                    {
+                        ApplyCurrentTarget(targetI);
+                        _chgStage = 3;
+                        UpdateChargerStageStripUi();
+                    }
+                    return;
+                }
+
+                // Ensure full CC target voltage/current in Stage 3 & Stage 4
+                if (Math.Abs(s.SetVoltage - targetV) > 0.03f)
+                    ApplyVoltageTarget(targetV);
+                if (Math.Abs(s.SetCurrent - targetI) > 0.02f)
+                    ApplyCurrentTarget(targetI);
+
+                // Stage 3 (BULK CC) vs Stage 4 (ABSORPTION CV)
+                bool nearTargetVoltage = s.OutputVoltage >= (targetV - 0.06f);
                 if (!s.IsConstantVoltage && !nearTargetVoltage)
                 {
+                    _chgStage = 3;
                     _chgCutoffConfirmTicks = 0;
                     _lblChgStatusBanner.Text = string.Format(
                         CultureInfo.InvariantCulture,
                         en
-                            ? "⚡ PHASE 1 — CC (Constant Current Bulk): {0:0.000}A @ {1:0.00}V ({2:0.00}V/cell)"
-                            : "⚡ FAZA 1 — CC (Stały Prąd): {0:0.000}A @ {1:0.00}V ({2:0.00}V/ogniwo)",
+                            ? "STAGE 3/5 [BULK CC — Constant Current]: {0:0.000}A @ {1:0.00}V ({2:0.00}V/cell)"
+                            : "ETAP 3/5 [BULK CC — Stały Prąd główny]: {0:0.000}A @ {1:0.00}V ({2:0.00}V/ogniwo)",
                         s.OutputCurrent, s.OutputVoltage, cellV);
                     _lblChgStatusBanner.ForeColor = AccentAmber;
+                    UpdateChargerStageStripUi();
                 }
                 else
                 {
-                    if (s.OutputCurrent <= cutoffI && elapsed.TotalSeconds > 3.0)
+                    _chgStage = 4;
+                    if (s.OutputCurrent <= cutoffI && elapsed.TotalSeconds > 4.0)
                     {
                         _chgCutoffConfirmTicks++;
                         int remSec = Math.Max(0, 5 - (_chgCutoffConfirmTicks / 4));
                         _lblChgStatusBanner.Text = string.Format(
                             CultureInfo.InvariantCulture,
                             en
-                                ? "💧 CV Cutoff threshold reached ({0:0.000}A <= {1:0.000}A) — Finishing in {2}s..."
-                                : "💧 Prąd spadł poniżej odcięcia ({0:0.000}A <= {1:0.000}A) — Auto-wyłączenie za {2}s...",
+                                ? "STAGE 4/5 [ABSORPTION CV — Finishing]: I={0:0.000}A <= {1:0.000}A (Stage 5 in {2}s...)"
+                                : "ETAP 4/5 [ABSORPTION CV — Kończenie]: I={0:0.000}A <= {1:0.000}A (Etap 5 za {2}s...)",
                             s.OutputCurrent, cutoffI, remSec);
                         _lblChgStatusBanner.ForeColor = AccentGreen;
+                        UpdateChargerStageStripUi();
 
                         if (_chgCutoffConfirmTicks >= 20)
                         {
-                            StopBatteryCharger(true, string.Format(
-                                CultureInfo.InvariantCulture,
-                                en
-                                    ? "✅ BATTERY 100% CHARGED ({0}S = {1:0.00}V, +{2:0} mAh) — Auto-Cutoff Turned Output OFF!"
-                                    : "✅ AKUMULATOR NAŁADOWANY 100% ({0}S = {1:0.00}V, +{2:0} mAh) — Auto-Stop Wyłączył Wyjście!",
-                                _selectedCellCount, s.OutputVoltage, chargedMah));
+                            _chgStage = 5;
+                            if (isLeadAcid)
+                            {
+                                // Enter Stage 5 Float Maintenance for Lead-Acid (2.25V/cell)
+                                float floatV = _selectedCellCount * 2.25f;
+                                ApplyVoltageTarget(floatV);
+                                UpdateChargerStageStripUi();
+                            }
+                            else
+                            {
+                                // Enter Stage 5 Auto-Stop Cutoff for Li-Ion / Li-Po / LiFePO4 / NiMH
+                                StopBatteryCharger(true, string.Format(
+                                    CultureInfo.InvariantCulture,
+                                    en
+                                        ? "STAGE 5/5 [AUTO-STOP — 100% CHARGED]: Pack {0}S ({1:0.00}V, +{2:0} mAh) — Output OFF"
+                                        : "ETAP 5/5 [AUTO-STOP — NAŁADOWANO 100%]: Pakiet {0}S ({1:0.00}V, +{2:0} mAh) — Wyjście OFF",
+                                    _selectedCellCount, s.OutputVoltage, chargedMah));
+                            }
                         }
                     }
                     else
@@ -2974,10 +3247,11 @@ namespace FnirsiDps150Studio
                         _lblChgStatusBanner.Text = string.Format(
                             CultureInfo.InvariantCulture,
                             en
-                                ? "💧 PHASE 2 — CV (Constant Voltage Absorption {0:0.00}V): I={1:0.000}A -> Cutoff at {2:0.000}A"
-                                : "💧 FAZA 2 — CV (Dopełnianie napięciowe {0:0.00}V): I={1:0.000}A -> Odcięcie przy {2:0.000}A",
+                                ? "STAGE 4/5 [ABSORPTION CV — Const Voltage {0:0.00}V]: I={1:0.000}A -> Cutoff at {2:0.000}A"
+                                : "ETAP 4/5 [ABSORPTION CV — Stałe Napięcie {0:0.00}V]: I={1:0.000}A -> Odcięcie przy {2:0.000}A",
                             s.OutputVoltage, s.OutputCurrent, cutoffI);
                         _lblChgStatusBanner.ForeColor = AccentCyan;
+                        UpdateChargerStageStripUi();
                     }
                 }
             }
