@@ -218,7 +218,7 @@ namespace FnirsiDps150Studio
                 BackColor = BgDark,
                 Padding = new Padding(8, 8, 8, 4)
             };
-            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54f));  // Top bar with Logo & Lang switch
+            mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));  // Top bar with DIP-18 Logo & Lang switch
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 345f)); // Readouts + Fast Controls
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));  // Tabs
             mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36f));  // Author Footer Bar
@@ -258,7 +258,7 @@ namespace FnirsiDps150Studio
             {
                 Text = "Port USB:",
                 AutoSize = true,
-                Margin = new Padding(2, 7, 4, 0),
+                Margin = new Padding(2, 11, 4, 0),
                 ForeColor = TextMuted,
                 Font = new Font("Segoe UI", 9f, FontStyle.Bold)
             };
@@ -266,8 +266,8 @@ namespace FnirsiDps150Studio
 
             _cboPort = new ComboBox
             {
-                Width = 205,
-                Margin = new Padding(0, 3, 6, 0),
+                Width = 195,
+                Margin = new Padding(0, 7, 6, 0),
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 BackColor = CardDark,
                 ForeColor = TextLight,
@@ -276,22 +276,22 @@ namespace FnirsiDps150Studio
             leftFlow.Controls.Add(_cboPort);
 
             _btnRefreshPorts = CreateFlatButton("⟳ Odśwież", new Size(86, 28), CardDark);
-            _btnRefreshPorts.Margin = new Padding(0, 2, 8, 0);
+            _btnRefreshPorts.Margin = new Padding(0, 6, 8, 0);
             leftFlow.Controls.Add(_btnRefreshPorts);
 
             var lblBaud = new Label
             {
                 Text = "Baud:",
                 AutoSize = true,
-                Margin = new Padding(0, 7, 4, 0),
+                Margin = new Padding(0, 11, 4, 0),
                 ForeColor = TextMuted
             };
             leftFlow.Controls.Add(lblBaud);
 
             _cboBaud = new ComboBox
             {
-                Width = 80,
-                Margin = new Padding(0, 3, 8, 0),
+                Width = 78,
+                Margin = new Padding(0, 7, 8, 0),
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 BackColor = CardDark,
                 ForeColor = TextLight,
@@ -301,20 +301,20 @@ namespace FnirsiDps150Studio
             _cboBaud.SelectedIndex = 0;
             leftFlow.Controls.Add(_cboBaud);
 
-            _btnConnect = CreateFlatButton("🔌 Połącz z DPS-150", new Size(154, 30), Color.FromArgb(2, 132, 199));
+            _btnConnect = CreateFlatButton("🔌 Połącz z DPS-150", new Size(152, 30), Color.FromArgb(2, 132, 199));
             _btnConnect.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            _btnConnect.Margin = new Padding(0, 1, 6, 0);
+            _btnConnect.Margin = new Padding(0, 5, 6, 0);
             leftFlow.Controls.Add(_btnConnect);
 
-            _btnSimulate = CreateFlatButton("🧪 Tryb Symulatora", new Size(144, 30), Color.FromArgb(71, 85, 105));
-            _btnSimulate.Margin = new Padding(0, 1, 6, 0);
+            _btnSimulate = CreateFlatButton("🧪 Tryb Symulatora", new Size(142, 30), Color.FromArgb(71, 85, 105));
+            _btnSimulate.Margin = new Padding(0, 5, 6, 0);
             leftFlow.Controls.Add(_btnSimulate);
 
             _lblSimLoadTitle = new Label
             {
                 Text = "Obciążenie [Ω]:",
                 AutoSize = true,
-                Margin = new Padding(4, 7, 4, 0),
+                Margin = new Padding(4, 11, 4, 0),
                 ForeColor = AccentAmber,
                 Visible = false
             };
@@ -323,7 +323,7 @@ namespace FnirsiDps150Studio
             _nudSimLoad = new NumericUpDown
             {
                 Width = 65,
-                Margin = new Padding(0, 4, 0, 0),
+                Margin = new Padding(0, 8, 0, 0),
                 DecimalPlaces = 1,
                 Minimum = 0.2m,
                 Maximum = 1000m,
@@ -347,14 +347,14 @@ namespace FnirsiDps150Studio
             _btnLangToggle = CreateFlatButton("🌐 PL ▸ EN", new Size(78, 28), Color.FromArgb(30, 58, 138));
             _btnLangToggle.Font = new Font("Consolas", 8.5f, FontStyle.Bold);
             _btnLangToggle.ForeColor = AccentCyan;
-            _btnLangToggle.Margin = new Padding(4, 2, 0, 0);
+            _btnLangToggle.Margin = new Padding(4, 6, 0, 0);
             rightFlow.Controls.Add(_btnLangToggle);
 
             _lblConnectionBadge = new Label
             {
                 Text = "● ROZŁĄCZONO",
                 AutoSize = true,
-                Margin = new Padding(4, 7, 6, 0),
+                Margin = new Padding(4, 11, 6, 0),
                 ForeColor = TextMuted,
                 Font = new Font("Segoe UI", 9f, FontStyle.Bold)
             };
@@ -364,7 +364,7 @@ namespace FnirsiDps150Studio
             {
                 Text = "COM4",
                 AutoSize = true,
-                Margin = new Padding(4, 7, 4, 0),
+                Margin = new Padding(4, 11, 4, 0),
                 ForeColor = TextMuted
             };
             rightFlow.Controls.Add(_lblDeviceInfo);
@@ -3167,9 +3167,9 @@ namespace FnirsiDps150Studio
         {
             var badge = new Panel
             {
-                Size = new Size(158, 34),
+                Size = new Size(192, 42),
                 Margin = new Padding(0, 0, 10, 0),
-                BackColor = CardDark
+                BackColor = Color.FromArgb(11, 15, 25)
             };
 
             badge.Paint += (s, e) =>
@@ -3178,21 +3178,12 @@ namespace FnirsiDps150Studio
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-                using (Pen pBorder = new Pen(Color.FromArgb(0, 180, 216), 1.2f))
+                using (Pen pBorder = new Pen(Color.FromArgb(30, 58, 95), 1.0f))
                 {
                     g.DrawRectangle(pBorder, 0, 0, badge.Width - 1, badge.Height - 1);
                 }
 
-                DrawVectorLogoEmblem(g, new Rectangle(3, 2, 30, 30));
-
-                using (Font fTop = new Font("Consolas", 9.5f, FontStyle.Bold))
-                using (Font fBot = new Font("Segoe UI", 7.0f, FontStyle.Bold))
-                using (Brush bCyan = new SolidBrush(AccentCyan))
-                using (Brush bAmber = new SolidBrush(AccentAmber))
-                {
-                    g.DrawString("DPS-150 PRO", fTop, bCyan, 36, 3);
-                    g.DrawString("BY PATRYK JANKOWSKI", fBot, bAmber, 36, 18);
-                }
+                DrawDip18JankowskiLogo(g, new Rectangle(2, 1, badge.Width - 4, badge.Height - 2));
             };
 
             return badge;
@@ -3218,16 +3209,16 @@ namespace FnirsiDps150Studio
                     g.DrawRectangle(borderPen, 0, 0, _footerPanel.Width - 1, _footerPanel.Height - 1);
                 }
 
-                DrawVectorLogoEmblem(g, new Rectangle(10, 3, 26, 26));
+                DrawDip18JankowskiLogo(g, new Rectangle(8, 2, 128, _footerPanel.Height - 4));
 
                 string leftSub = _isEnglish
-                    ? "FNIRSI DPS-150 STUDIO PRO • PRECISION CNC DC POWER SUPPLY CONTROL & TELEMETRY"
-                    : "FNIRSI DPS-150 STUDIO PRO • SYSTEM STEROWANIA I TELEMETRII ZASILACZA CNC DC";
+                    ? "FNIRSI DPS-150 STUDIO PRO • MCU // EMBEDDED ARCHITECTURE • PRECISION CNC DC TELEMETRY"
+                    : "FNIRSI DPS-150 STUDIO PRO • MCU // EMBEDDED ARCHITECTURE • STEROWANIE ZASILACZEM CNC DC";
 
                 using (Font fLeft = new Font("Segoe UI", 8.5f, FontStyle.Bold))
                 using (Brush bMuted = new SolidBrush(TextMuted))
                 {
-                    g.DrawString(leftSub, fLeft, bMuted, 44, 8);
+                    g.DrawString(leftSub, fLeft, bMuted, 144, 8);
                 }
 
                 // English signature badge as requested: "CREATED BY: PATRYK JANKOWSKI"
@@ -3255,52 +3246,155 @@ namespace FnirsiDps150Studio
             return _footerPanel;
         }
 
-        private static void DrawVectorLogoEmblem(Graphics g, Rectangle r)
+        private static void DrawDip18JankowskiLogo(Graphics g, Rectangle bounds)
         {
-            using (Brush bgBrush = new SolidBrush(Color.FromArgb(12, 22, 38)))
-            using (Pen ringPen = new Pen(AccentCyan, 1.8f))
-            {
-                g.FillEllipse(bgBrush, r);
-                g.DrawEllipse(ringPen, r);
-            }
+            float cx = bounds.Left + bounds.Width / 2f;
+            float cy = bounds.Top + bounds.Height / 2f;
 
-            PointF[] wave = new PointF[]
-            {
-                new PointF(r.Left + r.Width * 0.15f, r.Top + r.Height * 0.55f),
-                new PointF(r.Left + r.Width * 0.35f, r.Top + r.Height * 0.30f),
-                new PointF(r.Left + r.Width * 0.65f, r.Top + r.Height * 0.78f),
-                new PointF(r.Left + r.Width * 0.85f, r.Top + r.Height * 0.50f)
-            };
-            using (Pen wavePen = new Pen(Color.FromArgb(180, AccentCyan), 1.6f))
-            {
-                g.DrawLines(wavePen, wave);
-            }
+            float chipW = bounds.Width * 0.84f;
+            float chipH = bounds.Height * 0.52f;
+            float chipLeft = cx - chipW / 2f;
+            float chipRight = cx + chipW / 2f;
+            float chipTop = cy - chipH / 2f;
+            float chipBottom = cy + chipH / 2f;
 
-            PointF[] bolt = new PointF[]
+            float firstPinX = cx - chipW * 0.405f;
+            float lastPinX = cx + chipW * 0.405f;
+            float pinStep = (lastPinX - firstPinX) / 8f;
+
+            float padW = Math.Max(3.2f, chipW * 0.028f);
+            float padH = Math.Max(3.0f, bounds.Height * 0.095f);
+            float pinLeadLen = Math.Max(4.5f, bounds.Height * 0.15f);
+
+            Color cBg = Color.FromArgb(11, 15, 25);
+            Color cChipFill = Color.FromArgb(17, 24, 39);
+            Color cCyan = Color.FromArgb(56, 189, 248);
+            Color cPinPad = Color.FromArgb(148, 163, 184);
+            Color cAmber = Color.FromArgb(245, 158, 11);
+            Color cPinNum = Color.FromArgb(100, 116, 139);
+
+            using (Pen penPad = new Pen(cPinPad, 1.3f))
+            using (Pen penActive = new Pen(cCyan, 1.4f))
+            using (Brush brBg = new SolidBrush(cBg))
             {
-                new PointF(r.Left + r.Width * 0.56f, r.Top + r.Height * 0.14f),
-                new PointF(r.Left + r.Width * 0.32f, r.Top + r.Height * 0.52f),
-                new PointF(r.Left + r.Width * 0.50f, r.Top + r.Height * 0.52f),
-                new PointF(r.Left + r.Width * 0.42f, r.Top + r.Height * 0.86f),
-                new PointF(r.Left + r.Width * 0.70f, r.Top + r.Height * 0.44f),
-                new PointF(r.Left + r.Width * 0.52f, r.Top + r.Height * 0.44f)
-            };
-            using (Brush boltBrush = new SolidBrush(AccentAmber))
-            {
-                g.FillPolygon(boltBrush, bolt);
+                for (int i = 0; i < 9; i++)
+                {
+                    float px = firstPinX + i * pinStep;
+
+                    // Top pins (18 down to 10)
+                    if (i == 0)
+                    {
+                        // Pin 18 Active PCB Trace + Via
+                        float vy = chipTop - pinLeadLen - 2.5f;
+                        float vx = px - 3.5f;
+                        g.DrawLine(penActive, px, chipTop, px, chipTop - pinLeadLen + 1f);
+                        g.DrawLine(penActive, px, chipTop - pinLeadLen + 1f, vx, vy);
+                        g.FillEllipse(brBg, vx - 1.8f, vy - 1.8f, 3.6f, 3.6f);
+                        g.DrawEllipse(penActive, vx - 1.8f, vy - 1.8f, 3.6f, 3.6f);
+                    }
+                    else
+                    {
+                        g.DrawLine(penPad, px, chipTop, px, chipTop - pinLeadLen);
+                    }
+                    g.DrawRectangle(penPad, px - padW / 2f, chipTop - padH, padW, padH);
+
+                    // Bottom pins (1 to 9)
+                    if (i == 8)
+                    {
+                        // Pin 9 Active PCB Trace + Via
+                        float vy = chipBottom + pinLeadLen + 2.5f;
+                        float vx = px + 3.5f;
+                        g.DrawLine(penActive, px, chipBottom, px, chipBottom + pinLeadLen - 1f);
+                        g.DrawLine(penActive, px, chipBottom + pinLeadLen - 1f, vx, vy);
+                        g.FillEllipse(brBg, vx - 1.8f, vy - 1.8f, 3.6f, 3.6f);
+                        g.DrawEllipse(penActive, vx - 1.8f, vy - 1.8f, 3.6f, 3.6f);
+                    }
+                    else
+                    {
+                        g.DrawLine(penPad, px, chipBottom, px, chipBottom + pinLeadLen);
+                    }
+                    g.DrawRectangle(penPad, px - padW / 2f, chipBottom, padW, padH);
+                }
+
+                // DIP-18 Body
+                using (Brush brChip = new SolidBrush(cChipFill))
+                using (Pen penChip = new Pen(cCyan, 1.5f))
+                {
+                    g.FillRectangle(brChip, chipLeft, chipTop, chipW, chipH);
+                    g.DrawRectangle(penChip, chipLeft, chipTop, chipW, chipH);
+
+                    // Half-Moon Pin-1 Orientation Notch on Left Edge
+                    float notchR = Math.Max(3.2f, chipH * 0.19f);
+                    g.FillEllipse(brBg, chipLeft - notchR, cy - notchR, notchR * 2f, notchR * 2f);
+                    g.DrawArc(penChip, chipLeft - notchR, cy - notchR, notchR * 2f, notchR * 2f, -90f, 180f);
+                    // Cover the vertical border line inside the notch opening
+                    using (Pen penCover = new Pen(cBg, 2.0f))
+                    {
+                        g.DrawLine(penCover, chipLeft, cy - notchR + 1f, chipLeft, cy + notchR - 1f);
+                    }
+                }
+
+                // Pin 1 Amber Dot Indicator
+                float dotR = Math.Max(1.6f, chipH * 0.085f);
+                using (Brush brAmber = new SolidBrush(cAmber))
+                {
+                    g.FillEllipse(brAmber, chipLeft + notchRadiusOffset(chipH) - dotR, chipBottom - dotR * 2.7f, dotR * 2f, dotR * 2f);
+                }
+
+                // Corner Pin Numbers (18, 10, 1, 9) when tall enough
+                if (chipH >= 19f)
+                {
+                    using (Font fNum = new Font("Consolas", 5.2f, FontStyle.Bold))
+                    using (Brush brNum = new SolidBrush(cPinNum))
+                    using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                    {
+                        g.DrawString("18", fNum, brNum, firstPinX, chipTop + 3.5f, sf);
+                        g.DrawString("10", fNum, brNum, lastPinX, chipTop + 3.5f, sf);
+                        g.DrawString("1", fNum, brNum, firstPinX, chipBottom - 3.5f, sf);
+                        g.DrawString("9", fNum, brNum, lastPinX, chipBottom - 3.5f, sf);
+                    }
+                }
+
+                // 9 Letters J-A-N-K-O-W-S-K-I aligned with the 9 pin columns
+                string word = "JANKOWSKI";
+                float fontSize = Math.Max(6.5f, Math.Min(9.8f, chipH * 0.42f));
+                using (Font fLetter = new Font("Segoe UI", fontSize, FontStyle.Bold))
+                using (Brush brLetter = new SolidBrush(Color.FromArgb(248, 250, 252)))
+                using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                {
+                    for (int i = 0; i < 9; i++)
+                    {
+                        float px = firstPinX + i * pinStep;
+                        g.DrawString(word[i].ToString(), fLetter, brLetter, px, cy + 0.5f, sf);
+                    }
+                }
             }
+        }
+
+        private static float notchRadiusOffset(float chipH)
+        {
+            return Math.Max(5.5f, chipH * 0.28f);
         }
 
         private static Icon CreateCustomLogoIcon()
         {
             try
             {
+                Icon exeIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                if (exeIcon != null) return exeIcon;
+            }
+            catch
+            {
+            }
+
+            try
+            {
                 using (Bitmap bmp = new Bitmap(32, 32))
                 using (Graphics g = Graphics.FromImage(bmp))
                 {
                     g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                    g.Clear(Color.Transparent);
-                    DrawVectorLogoEmblem(g, new Rectangle(1, 1, 30, 30));
+                    g.Clear(Color.FromArgb(11, 15, 25));
+                    DrawDip18JankowskiLogo(g, new Rectangle(1, 4, 30, 24));
                     return Icon.FromHandle(bmp.GetHicon());
                 }
             }
